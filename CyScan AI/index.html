@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CyScan AI - Cyclone Satellite Detection & Tracking System</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0f9ff',
+              500: '#0284c7',
+              600: '#0369a1',
+              900: '#082f49',
+            },
+            storm: {
+              cat1: '#38bdf8', // Blue
+              cat2: '#4ade80', // Green
+              cat3: '#facc15', // Yellow
+              cat4: '#fb923c', // Orange
+              cat5: '#f43f5e', // Red / Extreme
+            }
+          },
+          animation: {
+            'pulse-fast': 'pulse 1.2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            'spin-slow': 'spin 12s linear infinite',
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  
+  <!-- Leaflet CSS for Map -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans antialiased selection:bg-cyan-500 selection:text-white">
+
+  <!-- Top Navigation Bar -->
+  <header class="border-b border-slate-800 bg-slate-900/90 backdrop-blur sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-600 via-sky-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+          <i class="fa-solid fa-hurricane text-xl text-white animate-spin-slow"></i>
+        </div>
+        <div>
+          <div class="flex items-center space-x-2">
+            <span class="font-extrabold text-xl tracking-tight bg-gradient-to-r from-cyan-400 to-sky-200 bg-clip-text text-transparent">CyScan AI</span>
+            <span class="text-xs px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-400 border border-cyan-800 font-mono">v2.4-SAT</span>
+          </div>
+          <p class="text-[11px] text-slate-400 hidden sm:block">Deep Learning Satellite Cyclone Detection & Early Warning System</p>
+        </div>
+      </div>
+
+      <div class="flex items-center space-x-3">
+        <!-- Live Status Badge -->
+        <div class="flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-emerald-950/60 border border-emerald-800/60 text-emerald-400 text-xs font-medium">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span>INSAT-3D / GOES-16 Live</span>
+        </div>
+
+        <button id="mobile-menu-toggle" class="mobile-menu-toggle" type="button" aria-expanded="false" aria-controls="main-navigation" aria-label="Open navigation"><i class="fa-solid fa-bars"></i></button>
+        <nav id="main-navigation" class="main-navigation hidden md:flex space-x-1" aria-label="Main navigation">
+          <button id="nav-btn-detector" class="nav-tab active px-3.5 py-1.5 text-xs font-semibold rounded-md transition-all">
+            <i class="fa-solid fa-satellite-dish mr-1.5"></i>Satellite Detector
+          </button>
+          <button id="nav-btn-tracker" class="nav-tab px-3.5 py-1.5 text-xs font-semibold rounded-md transition-all">
+            <i class="fa-solid fa-earth-americas mr-1.5"></i>Live Tracker
+          </button>
+          <button id="nav-btn-analytics" class="nav-tab px-3.5 py-1.5 text-xs font-semibold rounded-md transition-all">
+            <i class="fa-solid fa-chart-line mr-1.5"></i>Telemetry
+          </button>
+          <button id="nav-btn-api" class="nav-tab px-3.5 py-1.5 text-xs font-semibold rounded-md transition-all">
+            <i class="fa-solid fa-code mr-1.5"></i>ML Model API
+          </button>
+          <button id="nav-btn-contact" class="nav-tab px-3.5 py-1.5 text-xs font-semibold rounded-md transition-all">
+            <i class="fa-regular fa-envelope mr-1.5"></i>Contact
+          </button>
+        </nav>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Area -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-8">
+
+    <!-- Active Global Warning Banner -->
+    <div id="warning-banner" class="bg-gradient-to-r from-red-950/80 via-amber-950/50 to-slate-900 border border-red-800/80 rounded-xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xl">
+      <div class="flex items-center space-x-3.5">
+        <div class="p-2.5 rounded-lg bg-red-600/20 text-red-400 border border-red-600/40 text-lg">
+          <i class="fa-solid fa-triangle-exclamation animate-bounce"></i>
+        </div>
+        <div>
+          <div class="flex items-center space-x-2">
+            <h3 class="font-bold text-red-200 text-sm tracking-wide uppercase">Severe Weather Alert Bulletin</h3>
+            <span class="text-[10px] px-2 py-0.2 bg-red-900/60 text-red-300 rounded border border-red-700">HIGH ALERT</span>
+          </div>
+          <p class="text-xs text-slate-300 mt-0.5">Very Severe Cyclonic Storm <span class="font-semibold text-white">"AMPHAN-02B"</span> detected over Bay of Bengal (18.6°N, 87.2°E). Max winds: 115 kts (215 km/h). Central Pressure: 928 hPa.</p>
+        </div>
+      </div>
+      <div class="flex items-center space-x-2 self-end md:self-center">
+        <button id="quick-load-amphan" class="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-semibold shadow transition-colors flex items-center">
+          <i class="fa-solid fa-crosshairs mr-1.5"></i>Analyze amphan
+        </button>
+      </div>
+    </div>
+
+    <!-- SECTION 1: SATELLITE DETECTOR & INFERENCE STUDIO -->
+    <section id="view-detector" class="view-panel space-y-6">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 class="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
+            <span>Satellite Imagery AI Analysis</span>
+            <span class="text-xs font-normal px-2.5 py-0.5 rounded-full bg-cyan-950 text-cyan-300 border border-cyan-800">
+              YOLOv8 + EfficientNet-B4 + Dvorak Model
+            </span>
+          </h1>
+          <p class="text-sm text-slate-400">Upload infrared (IR), water vapor (WV), or visible satellite feeds to detect cyclonic vortex, eye coordinates, wind velocity, and pressure.</p>
+        </div>
+
+        <!-- Sample Satellite Imagery Selectors -->
+        <div class="flex items-center flex-wrap gap-2">
+          <span class="text-xs text-slate-400 font-medium">Presets:</span>
+          <button data-sample="amphan" class="sample-btn px-2.5 py-1 text-xs bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-md font-mono text-cyan-300 transition">
+            Amphan (Cat 5)
+          </button>
+          <button data-sample="fani" class="sample-btn px-2.5 py-1 text-xs bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-md font-mono text-amber-300 transition">
+            Fani (Cat 4)
+          </button>
+          <button data-sample="mocha" class="sample-btn px-2.5 py-1 text-xs bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-md font-mono text-orange-300 transition">
+            Mocha (Cat 4)
+          </button>
+          <button data-sample="calm" class="sample-btn px-2.5 py-1 text-xs bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-md font-mono text-emerald-300 transition">
+            Depression (Low)
+          </button>
+        </div>
+      </div>
+
+      <!-- Main Detection Grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        <!-- Left: Upload & Viewer (7 cols) -->
+        <div class="lg:col-span-7 space-y-4">
+          <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl relative flex flex-col">
+            <!-- Viewport Toolbar -->
+            <div class="px-4 py-3 bg-slate-800/80 border-b border-slate-700/80 flex items-center justify-between flex-wrap gap-2">
+              <div class="flex items-center space-x-2">
+                <span class="w-3 h-3 rounded-full bg-cyan-400"></span>
+                <span class="text-xs font-semibold text-slate-200">Satellite Viewport (IR 10.8µm Thermal Channel)</span>
+              </div>
+              <div class="flex items-center space-x-2">
+                <!-- Overlay Toggles -->
+                <button id="toggle-eye" class="text-xs px-2.5 py-1 bg-cyan-900/60 border border-cyan-600 text-cyan-300 rounded font-medium hover:bg-cyan-800 transition">
+                  <i class="fa-solid fa-bullseye mr-1"></i>Eye Bounding Box
+                </button>
+                <button id="toggle-bands" class="text-xs px-2.5 py-1 bg-slate-800 border border-slate-700 text-slate-300 rounded font-medium hover:bg-slate-700 transition">
+                  <i class="fa-solid fa-wind mr-1"></i>Spiral Rainbands
+                </button>
+                <button id="toggle-heatmap" class="text-xs px-2.5 py-1 bg-slate-800 border border-slate-700 text-slate-300 rounded font-medium hover:bg-slate-700 transition">
+                  <i class="fa-solid fa-fire-flame-curved mr-1"></i>Thermal Gradient
+                </button>
+              </div>
+            </div>
+
+            <!-- Canvas View Area -->
+            <div class="relative bg-slate-950 flex items-center justify-center min-h-[420px] max-h-[480px] overflow-hidden group">
+              <!-- Visual Scanline animation -->
+              <div id="radar-scan" class="absolute inset-0 pointer-events-none z-20 radar-scan-line hidden"></div>
+              
+              <!-- Canvas Display -->
+              <canvas id="satellite-canvas" width="600" height="450" class="w-full h-auto object-contain cursor-crosshair"></canvas>
+
+              <!-- Loading overlay -->
+              <div id="analysis-spinner" class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm z-30 flex flex-col items-center justify-center hidden">
+                <div class="w-16 h-16 border-4 border-cyan-500/20 border-t-cyan-400 rounded-full animate-spin"></div>
+                <p class="mt-4 text-sm font-semibold text-cyan-300 animate-pulse">Running Neural Convolutional Analysis...</p>
+                <span class="text-xs text-slate-400 mt-1">Estimating T-Number & Eye Radii</span>
+              </div>
+
+              <!-- HUD Coordinate Overlay -->
+              <div class="absolute bottom-3 left-3 bg-slate-900/85 backdrop-blur px-3 py-1.5 rounded-lg border border-slate-800 text-[11px] font-mono text-slate-300 z-10">
+                <span id="hud-coordinates">Center: 18.65°N, 87.21°E</span> | <span id="hud-cloudtop">Min Cloud-Top: -81.4°C</span>
+              </div>
+
+              <!-- Zoom & Reset floating buttons -->
+              <div class="absolute top-3 right-3 flex flex-col space-y-1 z-10">
+                <button id="btn-reanalyze" title="Re-run Detection" class="p-2 bg-slate-900/80 hover:bg-cyan-600 text-white rounded-lg border border-slate-700 backdrop-blur shadow transition">
+                  <i class="fa-solid fa-arrows-rotate text-xs"></i>
+                </button>
+                <button id="btn-download-result" title="Export Annotated Frame" class="p-2 bg-slate-900/80 hover:bg-slate-800 text-white rounded-lg border border-slate-700 backdrop-blur shadow transition">
+                  <i class="fa-solid fa-download text-xs"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- Upload Area & Controls Footer -->
+            <div class="p-4 bg-slate-900 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <label class="cursor-pointer flex items-center space-x-2 text-xs font-semibold px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white shadow-md shadow-cyan-600/20 transition">
+                <i class="fa-solid fa-cloud-arrow-up"></i>
+                <span>Upload Satellite Image (JPG/PNG/GeoTIFF)</span>
+                <input id="image-upload-input" type="file" accept="image/*" class="hidden">
+              </label>
+
+              <div class="text-[11px] text-slate-400 flex flex-col sm:items-end gap-1">
+                <span id="image-upload-status" role="status" aria-live="polite">No image selected</span>
+                <span>Supported: JPG, PNG, and browser-compatible image files</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: AI Detection Telemetry & Diagnostics (5 cols) -->
+        <div class="lg:col-span-5 space-y-4">
+
+          <!-- Intensity Metric Card -->
+          <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl relative overflow-hidden">
+            <div class="absolute top-0 right-0 transform translate-x-4 -translate-y-4 w-32 h-32 bg-cyan-500/10 rounded-full blur-2xl pointer-events-none"></div>
+
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold tracking-wider text-slate-400 uppercase">Detection Result</span>
+              <span id="storm-status-pill" class="text-xs px-2.5 py-1 rounded-full bg-red-950 text-red-400 border border-red-800 font-bold uppercase tracking-wider">
+                CAT 5 - SUPER CYCLONE
+              </span>
+            </div>
+
+            <!-- Cyclone Main Classification -->
+            <div class="mt-4 flex items-baseline justify-between">
+              <div>
+                <h2 id="storm-name-display" class="text-3xl font-extrabold text-white tracking-tight">Cyclone Amphan</h2>
+                <p id="storm-category-subtitle" class="text-xs text-red-400 font-medium mt-0.5">Category 5 (Super Cyclonic Storm)</p>
+              </div>
+              <div class="text-right">
+                <div class="text-2xl font-black text-cyan-400 font-mono" id="val-confidence">98.4%</div>
+                <div class="text-[11px] text-slate-400">AI Confidence</div>
+              </div>
+            </div>
+
+            <!-- Key Parameters Gauges -->
+            <div class="grid grid-cols-2 gap-3 mt-6">
+              
+              <!-- Wind Speed -->
+              <div class="p-3 bg-slate-950/70 border border-slate-800/80 rounded-xl">
+                <div class="flex items-center space-x-1.5 text-slate-400 text-xs">
+                  <i class="fa-solid fa-gauge-high text-cyan-400"></i>
+                  <span>Max Sustained Winds</span>
+                </div>
+                <div class="mt-2 flex items-baseline space-x-1">
+                  <span id="val-wind-speed" class="text-2xl font-bold font-mono text-white">140</span>
+                  <span class="text-xs text-slate-400">kts (260 km/h)</span>
+                </div>
+                <div class="w-full bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
+                  <div id="bar-wind" class="bg-gradient-to-r from-cyan-400 via-amber-400 to-red-500 h-full rounded-full" style="width: 95%;"></div>
+                </div>
+              </div>
+
+              <!-- Central Pressure -->
+              <div class="p-3 bg-slate-950/70 border border-slate-800/80 rounded-xl">
+                <div class="flex items-center space-x-1.5 text-slate-400 text-xs">
+                  <i class="fa-solid fa-arrows-down-to-line text-sky-400"></i>
+                  <span>Central Pressure</span>
+                </div>
+                <div class="mt-2 flex items-baseline space-x-1">
+                  <span id="val-pressure" class="text-2xl font-bold font-mono text-white">920</span>
+                  <span class="text-xs text-slate-400">hPa (mb)</span>
+                </div>
+                <div class="w-full bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
+                  <div id="bar-pressure" class="bg-sky-400 h-full rounded-full" style="width: 88%;"></div>
+                </div>
+              </div>
+
+              <!-- Eye Radius / Diameter -->
+              <div class="p-3 bg-slate-950/70 border border-slate-800/80 rounded-xl">
+                <div class="flex items-center space-x-1.5 text-slate-400 text-xs">
+                  <i class="fa-solid fa-circle-dot text-indigo-400"></i>
+                  <span>Eye Diameter</span>
+                </div>
+                <div class="mt-2 flex items-baseline space-x-1">
+                  <span id="val-eye-diam" class="text-2xl font-bold font-mono text-white">28</span>
+                  <span class="text-xs text-slate-400">km (Clear Eye)</span>
+                </div>
+                <span class="text-[10px] text-emerald-400 flex items-center mt-1">
+                  <i class="fa-solid fa-check-circle mr-1"></i>Well-defined Eye Wall
+                </span>
+              </div>
+
+              <!-- Dvorak T-Number -->
+              <div class="p-3 bg-slate-950/70 border border-slate-800/80 rounded-xl">
+                <div class="flex items-center space-x-1.5 text-slate-400 text-xs">
+                  <i class="fa-solid fa-calculator text-amber-400"></i>
+                  <span>Dvorak T-Number</span>
+                </div>
+                <div class="mt-2 flex items-baseline space-x-1">
+                  <span id="val-dvorak" class="text-2xl font-bold font-mono text-white">T 6.5</span>
+                  <span class="text-xs text-slate-400">/ CI 6.5</span>
+                </div>
+                <span class="text-[10px] text-amber-400 flex items-center mt-1">
+                  <i class="fa-solid fa-arrow-trend-up mr-1"></i>Rapid Intensification
+                </span>
+              </div>
+            </div>
+
+            <!-- Impact & Evacuation Advisory Box -->
+            <div id="advisory-box" class="mt-5 p-3.5 rounded-xl bg-red-950/40 border border-red-800/50">
+              <div class="flex items-center justify-between text-xs font-semibold text-red-300">
+                <span class="flex items-center"><i class="fa-solid fa-shield-halved mr-1.5 text-red-400"></i> Coastal Threat Assessment</span>
+                <span class="font-mono text-[11px] text-red-400">IMD LEVEL 4 WARNING</span>
+              </div>
+              <p id="advisory-text" class="text-xs text-slate-300 mt-1.5 leading-relaxed">
+                Catastrophic storm surge (> 5m) expected along coastline. Total suspension of marine operations. Mandatory evacuation within 35 km coastal buffer zone.
+              </p>
+            </div>
+          </div>
+
+          <!-- Cyclone Structure & Neural Feature Map Breakdown -->
+          <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-3">
+            <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center justify-between">
+              <span>Deep Learning Vortex Feature Analysis</span>
+              <span class="font-mono text-[10px] text-cyan-400">ResNet-50 / YOLO-Pose</span>
+            </h3>
+
+            <div class="space-y-2 text-xs">
+              <div class="flex justify-between items-center text-slate-300">
+                <span>Vorticity Pattern:</span>
+                <span id="feat-vortex" class="font-mono font-medium text-cyan-300">Curved Band / Dense Overcast (CDO)</span>
+              </div>
+              <div class="flex justify-between items-center text-slate-300">
+                <span>Convective Cloud Top Min Temp:</span>
+                <span id="feat-temp" class="font-mono font-medium text-purple-300">-84.2 °C (Deep Convection)</span>
+              </div>
+              <div class="flex justify-between items-center text-slate-300">
+                <span>Radius of Maximum Winds (RMW):</span>
+                <span id="feat-rmw" class="font-mono font-medium text-amber-300">32 km</span>
+              </div>
+              <div class="flex justify-between items-center text-slate-300">
+                <span>Estimated Forward Speed:</span>
+                <span id="feat-speed" class="font-mono font-medium text-slate-300">18 km/h (NNE Direction)</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- CONTACT SECTION -->
+    <section id="view-contact" class="view-panel hidden space-y-6">
+      <div class="contact-intro">
+        <span class="eyebrow"><i class="fa-regular fa-paper-plane"></i> GET IN TOUCH</span>
+        <h1>Let’s make storm intelligence more accessible.</h1>
+        <p>Questions about the dashboard, research collaboration, or bringing your satellite data into the workflow? Send the team a note.</p>
+      </div>
+      <div class="contact-layout">
+        <div class="contact-card contact-details">
+          <span class="contact-icon"><i class="fa-solid fa-satellite-dish"></i></span>
+          <h2>Talk to the CyScan team</h2>
+          <p>Share a little about what you’re working on. We’ll follow up with the right information.</p>
+          <div class="contact-note"><i class="fa-regular fa-clock"></i><span><strong>Built for collaboration</strong><br>Researchers, forecasters, and curious minds are welcome.</span></div>
+          <div class="contact-note"><i class="fa-solid fa-shield-halved"></i><span><strong>Your message stays yours</strong><br>Contact details are only used to respond to your enquiry.</span></div>
+        </div>
+        <form id="contact-form" class="contact-card contact-form">
+          <div class="form-heading"><div><span class="eyebrow">CONTACT FORM</span><h2>Send us a message</h2></div><span class="required-note">* Required</span></div>
+          <div class="form-grid">
+            <label><span class="field-label">Your name <b>*</b></span><input name="name" autocomplete="name" placeholder="Jane Smith" required maxlength="100"></label>
+            <label><span class="field-label">Email address <b>*</b></span><input name="email" type="email" autocomplete="email" placeholder="jane@example.com" required maxlength="254"></label>
+          </div>
+          <label><span class="field-label">What’s this about? <b>*</b></span><select name="topic" required><option value="" disabled selected>Choose a topic</option><option>Dashboard and features</option><option>Research collaboration</option><option>Satellite data and the API</option><option>Something else</option></select></label>
+          <label><span class="field-label">Your message <b>*</b></span><textarea name="message" rows="5" placeholder="Tell us a little about your enquiry…" required maxlength="3000"></textarea></label>
+          <button class="contact-submit" type="submit">Send message <i class="fa-solid fa-arrow-right"></i></button>
+          <p id="contact-status" class="contact-status" role="status" aria-live="polite">This demo form prepares an email in your default mail app; it does not store your details.</p>
+        </form>
+      </div>
+    </section>
+
+    <!-- SECTION 2: LIVE SATELLITE TRACKER & STORM MAP -->
+    <section id="view-tracker" class="view-panel hidden space-y-6">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 class="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
+            <span>Global Real-Time Tropical Cyclone Tracker</span>
+            <span class="text-xs font-normal px-2.5 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800">
+              NASA GIBS & JTWC Integration
+            </span>
+          </h2>
+          <p class="text-sm text-slate-400">Interactive satellite trajectory radar showing active cyclones, projected cone of uncertainty, and landfall forecasts.</p>
+        </div>
+
+        <div class="flex items-center space-x-2">
+          <button id="btn-focus-bay" class="px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-200 font-medium transition">
+           
+                <input id="image-upload-input" type="file" accept="image/*" class="hidden">
+           Upload Satellite Image (JPG/PNG/GeoTIFF)
+            </button>  
+            <button id="btn-focus-pacific" class="px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-200 font-medium transition">
+            North Indian Ocean
+          </button>
+          <button id="btn-focus-pacific" class="px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-200 font-medium transition">
+            Western Pacific
+          </button>
+          <button id="btn-focus-atlantic" class="px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-200 font-medium transition">
+            Atlantic Basin
+          </button>
+        </div>
+      </div>
+
+      <!-- Map Container -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl relative">
+        <div id="leaflet-map" class="w-full h-[580px] z-10"></div>
+
+        <!-- Floating Map Legend -->
+        <div class="absolute bottom-5 right-5 z-20 bg-slate-900/90 backdrop-blur-md p-3.5 rounded-xl border border-slate-800 text-xs shadow-xl space-y-2 pointer-events-auto max-w-xs">
+          <div class="font-bold text-slate-200 text-[11px] uppercase tracking-wider">Cyclone Intensity Legend (Saffir-Simpson / IMD)</div>
+          <div class="grid grid-cols-2 gap-1.5 text-[11px]">
+            <div class="flex items-center space-x-2"><span class="w-3 h-3 rounded-full bg-cyan-400"></span><span>Depression (31-49 km/h)</span></div>
+            <div class="flex items-center space-x-2"><span class="w-3 h-3 rounded-full bg-emerald-400"></span><span>Cyclonic Storm (62-88 km/h)</span></div>
+            <div class="flex items-center space-x-2"><span class="w-3 h-3 rounded-full bg-yellow-400"></span><span>Severe CS (89-117 km/h)</span></div>
+            <div class="flex items-center space-x-2"><span class="w-3 h-3 rounded-full bg-orange-400"></span><span>Very Severe CS (118-166)</span></div>
+            <div class="flex items-center space-x-2"><span class="w-3 h-3 rounded-full bg-red-500"></span><span>Extremely Severe (167-221)</span></div>
+            <div class="flex items-center space-x-2"><span class="w-3 h-3 rounded-full bg-purple-500"></span><span>Super Cyclone (> 222 km/h)</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 3: TELEMETRY & HISTORICAL PRESSURE/WIND TRENDS -->
+    <section id="view-analytics" class="view-panel hidden space-y-6">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 class="text-2xl font-bold tracking-tight text-white">Cyclone Barometric & Wind Telemetry</h2>
+          <p class="text-sm text-slate-400">48-hour pressure drop vs. peak wind velocity analysis for the selected tropical system.</p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Wind & Pressure Trend Chart -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="font-bold text-sm text-slate-200 flex items-center">
+              <i class="fa-solid fa-chart-line text-cyan-400 mr-2"></i> Central Pressure (hPa) vs Sustained Wind Speed (knots)
+            </h3>
+            <span class="text-[11px] font-mono text-slate-400">48-hr Interval</span>
+          </div>
+          <div class="h-72">
+            <canvas id="telemetry-chart"></canvas>
+          </div>
+        </div>
+
+        <!-- Cloud Top Temperature Histogram Chart -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="font-bold text-sm text-slate-200 flex items-center">
+              <i class="fa-solid fa-temperature-arrow-down text-purple-400 mr-2"></i> Infrared Cloud-Top Brightness Temperature (°C)
+            </h3>
+            <span class="text-[11px] font-mono text-slate-400">10.8µm Channel</span>
+          </div>
+          <div class="h-72">
+            <canvas id="temp-dist-chart"></canvas>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 4: AI ARCHITECTURE & PYTHON BACKEND API INTEGRATION -->
+    <section id="view-api" class="view-panel hidden space-y-6">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 class="text-2xl font-bold tracking-tight text-white">Satellite Cyclone Detection Model & Python API</h2>
+          <p class="text-sm text-slate-400">How the deep learning pipeline works and how to hook this web interface to your real PyTorch/TensorFlow backend.</p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        <!-- Architecture Explanation -->
+        <div class="lg:col-span-5 space-y-4">
+          <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
+            <h3 class="font-bold text-sm text-cyan-300 uppercase tracking-wider flex items-center">
+              <i class="fa-solid fa-brain mr-2"></i> ML Pipeline Architecture
+            </h3>
+            
+            <div class="space-y-3 text-xs text-slate-300">
+              <div class="p-3 bg-slate-950 rounded-lg border border-slate-800">
+                <span class="font-bold text-white block">1. Satellite Channel Preprocessing</span>
+                Extract Infrared (IR 10.8µm) and Water Vapor (6.7µm) channels from INSAT/GOES HDF5 or NetCDF4 files. Apply radiometric calibration and brightness temperature conversion.
+              </div>
+
+              <div class="p-3 bg-slate-950 rounded-lg border border-slate-800">
+                <span class="font-bold text-white block">2. Eye & Vortex Center Localization (YOLOv8)</span>
+                A bounding box regression model identifies the eye or Central Dense Overcast (CDO) center with pixel precision (x, y, radius).
+              </div>
+
+              <div class="p-3 bg-slate-950 rounded-lg border border-slate-800">
+                <span class="font-bold text-white block">3. Intensity & Wind Estimation (Deep Dvorak / EfficientNet)</span>
+                A convolutional regression network estimates maximum sustained wind speed (MSW in knots) and Minimum Central Pressure (MCP in hPa) from cloud banding pattern features.
+              </div>
+
+              <div class="p-3 bg-slate-950 rounded-lg border border-slate-800">
+                <span class="font-bold text-white block">4. IMD / Saffir-Simpson Classification</span>
+                Outputs categorized alerts: Depression, Deep Depression, Cyclonic Storm, Severe, Very Severe, Extremely Severe, or Super Cyclone.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Python FastAPI Code Snippet -->
+        <div class="lg:col-span-7 space-y-4">
+          <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-xs text-slate-300 font-mono">backend_api.py (FastAPI + PyTorch)</span>
+              <button id="copy-code-btn" class="px-2.5 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 rounded transition">
+                <i class="fa-regular fa-copy mr-1"></i>Copy Code
+              </button>
+            </div>
+
+            <pre class="bg-slate-950 p-4 rounded-xl text-xs font-mono text-slate-300 overflow-x-auto max-h-[460px] border border-slate-800/80 leading-relaxed"><code id="code-block">from fastapi import FastAPI, UploadFile, File
+from fastapi.middleware.cors import CORSMiddleware
+import torch
+import torchvision.transforms as T
+from PIL import Image
+import io
+
+app = FastAPI(title="CyScan Satellite Cyclone API")
+
+# Enable CORS for the web frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Load your custom fine-tuned Cyclone Intensity Model
+# e.g., trained on INSAT-3D / Tropical Cyclone Satellite Dataset (TCIR)
+# model = torch.load("cyclone_efficientnet_b4.pth")
+# model.eval()
+
+transform = T.Compose([
+    T.Resize((256, 256)),
+    T.ToTensor(),
+    T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+])
+
+@app.post("/api/detect-cyclone")
+async def detect_cyclone(file: UploadFile = File(...)):
+    contents = await file.read()
+    image = Image.open(io.BytesIO(contents)).convert("RGB")
+    tensor = transform(image).unsqueeze(0)
+    
+    # Run inference (Example simulated calculation)
+    # with torch.no_grad():
+    #     pred_wind, pred_pressure, eye_coords = model(tensor)
+    
+    return {
+        "status": "success",
+        "cyclone_detected": True,
+        "storm_name": "Detected Tropical Vortex",
+        "category": "Category 4 - Very Severe Cyclonic Storm",
+        "wind_speed_knots": 115,
+        "wind_speed_kmh": 213,
+        "central_pressure_hpa": 940,
+        "eye_coordinates": {"x": 305, "y": 220, "radius_km": 24},
+        "dvorak_t_number": 5.5,
+        "confidence": 0.962
+    }</code></pre>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t border-slate-800 bg-slate-900/60 py-6 mt-12">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
+      <div class="flex items-center space-x-2">
+        <i class="fa-solid fa-satellite text-cyan-400"></i>
+        <span>CyScan AI &bull; Satellite Tropical Cyclone Detection and Early Warning Platform</span>
+      </div>
+      <div class="flex items-center space-x-4">
+        <span>INSAT-3D &bull; GOES-16 &bull; Himawari &bull; MODIS</span>
+        <a href="#" class="hover:text-slate-400 transition">IMD / JTWC Protocol Compliant</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Application Logic -->
+  <script src="app.js"></script>
+</body>
+</html>
